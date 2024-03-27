@@ -15,7 +15,7 @@ from sklearn.metrics.cluster import normalized_mutual_info_score
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
+# import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
@@ -67,7 +67,7 @@ def parse_args():
 def main(args):
     # fix random seeds
     torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+    # torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
 
     # CNN
@@ -77,8 +77,9 @@ def main(args):
     fd = int(model.top_layer.weight.size()[1])
     model.top_layer = None
     model.features = torch.nn.DataParallel(model.features)
-    model.cuda()
-    cudnn.benchmark = True
+    # model.cuda()
+    model.cpu()
+    # cudnn.benchmark = True
 
     # create optimizer
     optimizer = torch.optim.SGD(
@@ -95,7 +96,7 @@ def main(args):
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
+            checkpoint = torch.load(args.resume, map_location=torch.device('cpu'))
             args.start_epoch = checkpoint['epoch']
             # remove top_layer parameters from checkpoint
             for key in checkpoint['state_dict']:
@@ -126,7 +127,8 @@ def main(args):
 
     # load the data
     end = time.time()
-    dataset = datasets.ImageFolder(args.data, transform=transforms.Compose(tra))
+    # dataset = datasets.ImageFolder(args.data, transform=transforms.Compose(tra))
+    dataset = datasets.ImageFolder(args.data)
     if args.verbose:
         print('Load dataset: {0:.2f} s'.format(time.time() - end))
 
@@ -259,8 +261,9 @@ def train(loader, model, crit, opt, epoch):
                 'optimizer' : opt.state_dict()
             }, path)
 
-        target = target.cuda(async=True)
-        input_var = torch.autograd.Variable(input_tensor.cuda())
+        # target = target.cuda(async=True)
+        # input_var = torch.autograd.Variable(input_tensor.cuda())
+        input_var = torch.autograd.Variable(input_tensor)
         target_var = torch.autograd.Variable(target)
 
         output = model(input_var)

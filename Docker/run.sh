@@ -1,1 +1,1 @@
-docker run --gpus all -it --name deepcluster  torch /bin/bash
+docker run -it --name deepcluster  torch /bin/bash

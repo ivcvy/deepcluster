@@ -1,6 +1,4 @@
-#FROM ubuntu:14.04
-#FROM anibali/pytorch:cuda-8.0
-FROM nvidia/cuda:8.0-cudnn5-devel-ubuntu16.04
+FROM ubuntu:14.04
 
 WORKDIR /usr/src/app
 
@@ -30,32 +28,13 @@ RUN export CMAKE_PREFIX_PATH=/opt/conda/ &&\
     conda install numpy mkl setuptools cmake cffi scikit-learn &&\
     apt-get -y install gcc libblas-dev liblapack-dev &&\
     conda install -c soumith magma-cuda80 &&\
-    pip install torchvision==0.1.8
+    conda install pytorch torchvision cpuonly -c pytorch
 
-RUN wget https://github.com/pytorch/pytorch/archive/v0.1.8.tar.gz &&\
-    tar -xzf v0.1.8.tar.gz &&\
-    rm v0.1.8.tar.gz &&\
-    cd pytorch-0.1.8 &&\
-    pip install -r requirements.txt &&\
-    python setup.py install 
-
-RUN wget https://github.com/facebookresearch/faiss/archive/v1.3.0.tar.gz &&\
-    tar -xzf v1.3.0.tar.gz &&\
-    rm v1.3.0.tar.gz &&\
-    cd faiss-1.3.0 &&\
-    ./configure &&\
-    make &&\
-    make install &&\
-    cd gpu &&\
-    make -j &&\
-    cd ../python &&\
-    make _swigfaiss_gpu.so &&\
-    cd ../ &&\
-    make py &&\
+RUN conda install faiss-cpu==1.3.0 -c pytorch &&\
     conda init bash
 
 RUN pip install bpython future
-RUN echo "conda activate pytorch27" >> /root/.bashrc
+RUN echo "source activate pytorch27" >> /root/.bashrc
 
 ENV PYTHONPATH="/usr/src/app/faiss-1.3.0/python/:${PYTHONPATH}"
 COPY . .

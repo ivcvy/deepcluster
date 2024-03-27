@@ -12,8 +12,8 @@ LR=0.05
 WD=-5
 K=10000
 WORKERS=12
-EXP="/private/home/${USER}/test/exp"
-PYTHON="/private/home/${USER}/test/conda/bin/python"
+EXP="/usr/src/app/test/exp"
+PYTHON="/opt/conda/envs/pytorch27/bin/python"
 
 mkdir -p ${EXP}
 
