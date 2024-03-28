@@ -15,7 +15,7 @@ from sklearn.metrics.cluster import normalized_mutual_info_score
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-# import torch.backends.cudnn as cudnn
+import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
@@ -67,19 +67,24 @@ def parse_args():
 def main(args):
     # fix random seeds
     torch.manual_seed(args.seed)
-    # torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
 
+    # assign device by checking GPU availability
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+        device = torch.device('cuda')
+        torch.backends.cudnn.benchmark = True
+    else:
+        device = torch.device('cpu')
+    
     # CNN
     if args.verbose:
         print('Architecture: {}'.format(args.arch))
     model = models.__dict__[args.arch](sobel=args.sobel)
+    model = model.to(device)
     fd = int(model.top_layer.weight.size()[1])
     model.top_layer = None
     model.features = torch.nn.DataParallel(model.features)
-    # model.cuda()
-    model.cpu()
-    # cudnn.benchmark = True
 
     # create optimizer
     optimizer = torch.optim.SGD(
@@ -90,13 +95,13 @@ def main(args):
     )
 
     # define loss function
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(device)
 
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
             print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume, map_location=torch.device('cpu'))
+            checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
             # remove top_layer parameters from checkpoint
             for key in checkpoint['state_dict']:
@@ -127,8 +132,7 @@ def main(args):
 
     # load the data
     end = time.time()
-    # dataset = datasets.ImageFolder(args.data, transform=transforms.Compose(tra))
-    dataset = datasets.ImageFolder(args.data)
+    dataset = datasets.ImageFolder(args.data, transform=transforms.Compose(tra))
     if args.verbose:
         print('Load dataset: {0:.2f} s'.format(time.time() - end))
 
@@ -149,7 +153,7 @@ def main(args):
         model.classifier = nn.Sequential(*list(model.classifier.children())[:-1])
 
         # get the features for the whole dataset
-        features = compute_features(dataloader, model, len(dataset))
+        features = compute_features(dataloader, model, len(dataset), device)
 
         # cluster the features
         if args.verbose:
@@ -176,12 +180,12 @@ def main(args):
 
         # set last fully connected layer
         mlp = list(model.classifier.children())
-        mlp.append(nn.ReLU(inplace=True).cuda())
+        mlp.append(nn.ReLU(inplace=True).to(device))
         model.classifier = nn.Sequential(*mlp)
         model.top_layer = nn.Linear(fd, len(deepcluster.images_lists))
         model.top_layer.weight.data.normal_(0, 0.01)
         model.top_layer.bias.data.zero_()
-        model.top_layer.cuda()
+        model.top_layer.to(device)
 
         # train network with clusters as pseudo-labels
         end = time.time()
@@ -261,10 +265,10 @@ def train(loader, model, crit, opt, epoch):
                 'optimizer' : opt.state_dict()
             }, path)
 
-        # target = target.cuda(async=True)
-        # input_var = torch.autograd.Variable(input_tensor.cuda())
-        input_var = torch.autograd.Variable(input_tensor)
-        target_var = torch.autograd.Variable(target)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        target = target.to(device, non_blocking=True)
+        input_var = input_tensor.to(device).requires_grad_() # Variable is deprecated and not necessary to use autograd
+        target_var = target.requires_grad_() # autograd for labels?
 
         output = model(input_var)
         loss = crit(output, target_var)
@@ -293,35 +297,36 @@ def train(loader, model, crit, opt, epoch):
 
     return losses.avg
 
-def compute_features(dataloader, model, N):
+def compute_features(dataloader, model, N, device):
     if args.verbose:
         print('Compute features')
     batch_time = AverageMeter()
     end = time.time()
     model.eval()
     # discard the label information in the dataloader
-    for i, (input_tensor, _) in enumerate(dataloader):
-        input_var = torch.autograd.Variable(input_tensor.cuda(), volatile=True)
-        aux = model(input_var).data.cpu().numpy()
+    with torch.no_grad(): # volatile is deprecated, use torch.no_grad() instead
+        for i, (input_tensor, _) in enumerate(dataloader):
+            input_var = input_tensor.to(device)
+            aux = model(input_var).data.cpu().numpy()
 
-        if i == 0:
-            features = np.zeros((N, aux.shape[1]), dtype='float32')
+            if i == 0:
+                features = np.zeros((N, aux.shape[1]), dtype='float32')
 
-        aux = aux.astype('float32')
-        if i < len(dataloader) - 1:
-            features[i * args.batch: (i + 1) * args.batch] = aux
-        else:
-            # special treatment for final batch
-            features[i * args.batch:] = aux
+            aux = aux.astype('float32')
+            if i < len(dataloader) - 1:
+                features[i * args.batch: (i + 1) * args.batch] = aux
+            else:
+                # special treatment for final batch
+                features[i * args.batch:] = aux
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-        if args.verbose and (i % 200) == 0:
-            print('{0} / {1}\t'
-                  'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})'
-                  .format(i, len(dataloader), batch_time=batch_time))
+            if args.verbose and (i % 200) == 0:
+                print('{0} / {1}\t'
+                    'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})'
+                    .format(i, len(dataloader), batch_time=batch_time))
     return features
 
 

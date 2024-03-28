@@ -6,14 +6,14 @@
 #
 #!/bin/bash
 
-DIR="/datasets01/imagenet_full_size/061417/train"
+DIR="/usr/src/app/data/sample"
 ARCH="alexnet"
 LR=0.05
 WD=-5
 K=10000
 WORKERS=12
 EXP="/usr/src/app/test/exp"
-PYTHON="/opt/conda/envs/pytorch27/bin/python"
+PYTHON="/opt/conda/envs/pytorch3/bin/python"
 
 mkdir -p ${EXP}
 

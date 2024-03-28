@@ -73,7 +73,7 @@ class ReassignedDataset(data.Dataset):
         return len(self.imgs)
 
 
-def preprocess_features(npdata, pca=256):
+def preprocess_features(npdata, pca=50): # https://github.com/facebookresearch/deepcluster/issues/40
     """Preprocess an array of features.
     Args:
         npdata (np.array N * ndim): features to preprocess
@@ -109,12 +109,15 @@ def make_graph(xb, nnn):
     N, dim = xb.shape
 
     # we need only a StandardGpuResources per GPU
-    res = faiss.StandardGpuResources()
+    res = faiss.StandardGpuResources() if torch.cuda.is_available() else None
 
     # L2
-    flat_config = faiss.GpuIndexFlatConfig()
-    flat_config.device = int(torch.cuda.device_count()) - 1
-    index = faiss.GpuIndexFlatL2(res, dim, flat_config)
+    if torch.cuda.is_available():
+        flat_config = faiss.GpuIndexFlatConfig()
+        flat_config.device = int(torch.cuda.device_count()) - 1
+        index = faiss.GpuIndexFlatL2(res, dim, flat_config)
+    else:
+        index = faiss.IndexFlatL2(dim)
     index.add(xb)
     D, I = index.search(xb, nnn + 1)
     return I, D
@@ -167,11 +170,14 @@ def run_kmeans(x, nmb_clusters, verbose=False):
 
     clus.niter = 20
     clus.max_points_per_centroid = 10000000
-    res = faiss.StandardGpuResources()
-    flat_config = faiss.GpuIndexFlatConfig()
-    flat_config.useFloat16 = False
-    flat_config.device = 0
-    index = faiss.GpuIndexFlatL2(res, d, flat_config)
+    res = faiss.StandardGpuResources() if torch.cuda.is_available() else None
+    if torch.cuda.is_available():
+        flat_config = faiss.GpuIndexFlatConfig()
+        flat_config.useFloat16 = False
+        flat_config.device = 0
+        index = faiss.GpuIndexFlatL2(res, d, flat_config)
+    else:
+        index = faiss.IndexFlatL2(d)
 
     # perform the training
     clus.train(x, index)
@@ -208,7 +214,8 @@ class Kmeans(object):
         xb = preprocess_features(data)
 
         # cluster the data
-        I, loss = run_kmeans(xb, self.k, verbose)
+        # I, loss = run_kmeans(xb, self.k, verbose)
+        I, loss = run_kmeans(xb, min(self.k, len(data)-1), verbose) # small subsample purpose only
         self.images_lists = [[] for i in range(self.k)]
         for i in range(len(data)):
             self.images_lists[I[i]].append(i)
