@@ -20,6 +20,7 @@ import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+from loader import RegimenDataset
 
 import clustering
 import models
@@ -51,7 +52,7 @@ def parse_args():
                         help='number of total epochs to run (default: 200)')
     parser.add_argument('--start_epoch', default=0, type=int,
                         help='manual epoch number (useful on restarts) (default: 0)')
-    parser.add_argument('--batch', default=256, type=int,
+    parser.add_argument('--batch', default=1, type=int,
                         help='mini-batch size (default: 256)')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum (default: 0.9)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -61,6 +62,7 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=31, help='random seed (default: 31)')
     parser.add_argument('--exp', type=str, default='', help='path to exp folder')
     parser.add_argument('--verbose', action='store_true', help='chatty')
+    parser.add_argument('--nrows', type=int, default=20, help='number of rows for each sub-sequence')
     return parser.parse_args()
 
 
@@ -132,7 +134,8 @@ def main(args):
 
     # load the data
     end = time.time()
-    dataset = datasets.ImageFolder(args.data, transform=transforms.Compose(tra))
+    # dataset = datasets.ImageFolder(args.data, transform=transforms.Compose(tra))
+    dataset = RegimenDataset(args.data, args.nrows)
     if args.verbose:
         print('Load dataset: {0:.2f} s'.format(time.time() - end))
 
@@ -164,7 +167,7 @@ def main(args):
         if args.verbose:
             print('Assign pseudo labels')
         train_dataset = clustering.cluster_assign(deepcluster.images_lists,
-                                                  dataset.imgs)
+                                                  dataset)
 
         # uniformly sample per target
         sampler = UnifLabelSampler(int(args.reassign * len(train_dataset)),
@@ -268,13 +271,12 @@ def train(loader, model, crit, opt, epoch):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         target = target.to(device, non_blocking=True)
         input_var = input_tensor.to(device).requires_grad_() # Variable is deprecated and not necessary to use autograd
-        target_var = target.requires_grad_() # autograd for labels?
-
+        target_var = target # .requires_grad_() RuntimeError: only Tensors of floating point dtype can require gradients
         output = model(input_var)
         loss = crit(output, target_var)
 
         # record loss
-        losses.update(loss.data[0], input_tensor.size(0))
+        losses.update(loss.data, input_tensor.size(0))
 
         # compute gradient and do SGD step
         opt.zero_grad()
@@ -305,7 +307,7 @@ def compute_features(dataloader, model, N, device):
     model.eval()
     # discard the label information in the dataloader
     with torch.no_grad(): # volatile is deprecated, use torch.no_grad() instead
-        for i, (input_tensor, _) in enumerate(dataloader):
+        for i, (input_tensor) in enumerate(dataloader):
             input_var = input_tensor.to(device)
             aux = model(input_var).data.cpu().numpy()
 

@@ -1,4 +1,5 @@
 FROM ubuntu:22.04
+# FROM nvidia/cuda:12.3.2-cudnn9-devel-ubuntu22.04 
 
 WORKDIR /usr/src/app
 
@@ -33,7 +34,7 @@ RUN export CMAKE_PREFIX_PATH=/opt/conda/ &&\
 RUN conda install faiss-cpu==1.3.0 -c pytorch &&\
     conda init bash
 
-RUN pip install bpython future
+RUN pip install bpython future typer pandas
 RUN echo "source activate pytorch3" >> /root/.bashrc
 
 ENV PYTHONPATH="/usr/src/app/faiss-1.3.0/python/:${PYTHONPATH}"

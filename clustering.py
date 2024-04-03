@@ -51,7 +51,7 @@ class ReassignedDataset(data.Dataset):
         label_to_idx = {label: idx for idx, label in enumerate(set(pseudolabels))}
         images = []
         for j, idx in enumerate(image_indexes):
-            path = dataset[idx][0]
+            path = dataset[idx]
             pseudolabel = label_to_idx[pseudolabels[j]]
             images.append((path, pseudolabel))
         return images
@@ -64,7 +64,7 @@ class ReassignedDataset(data.Dataset):
             tuple: (image, pseudolabel) where pseudolabel is the cluster of index datapoint
         """
         path, pseudolabel = self.imgs[index]
-        img = pil_loader(path)
+        img = path
         if self.transform is not None:
             img = self.transform(img)
         return img, pseudolabel
@@ -147,7 +147,7 @@ def cluster_assign(images_lists, dataset):
                             transforms.ToTensor(),
                             normalize])
 
-    return ReassignedDataset(image_indexes, pseudolabels, dataset, t)
+    return ReassignedDataset(image_indexes, pseudolabels, dataset, transform=None)
 
 
 def run_kmeans(x, nmb_clusters, verbose=False):
@@ -215,7 +215,7 @@ class Kmeans(object):
 
         # cluster the data
         # I, loss = run_kmeans(xb, self.k, verbose)
-        I, loss = run_kmeans(xb, min(self.k, len(data)-1), verbose) # small subsample purpose only
+        I, loss = run_kmeans(xb, self.k, verbose)
         self.images_lists = [[] for i in range(self.k)]
         for i in range(len(data)):
             self.images_lists[I[i]].append(i)

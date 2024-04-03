@@ -6,11 +6,13 @@
 #
 #!/bin/bash
 
-DIR="/usr/src/app/data/sample"
+
+# DIR="/usr/src/app/data/sample"
+DIR="/usr/src/app/final_cohort.csv"
 ARCH="alexnet"
 LR=0.05
 WD=-5
-K=10000
+K=1000
 WORKERS=12
 EXP="/usr/src/app/test/exp"
 PYTHON="/opt/conda/envs/pytorch3/bin/python"
